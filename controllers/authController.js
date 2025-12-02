@@ -5,7 +5,7 @@ const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/emai
 
 // Admin email detection - Add your admin emails here
 const ADMIN_EMAILS = [
-  ' officialbrainquestapp@gmail.com',
+  'officialbrainquestapp@gmail.com',
   // Add more admin emails
 ];
 
