@@ -6,6 +6,7 @@ const {
   verifyEmail,
   resendVerificationCode,
   login,
+  logout,  // Add this
   forgotPassword,
   resetPassword,
   getMe
@@ -21,9 +22,9 @@ router.post('/signup', signup);
 router.post('/verify-email', verifyEmail);
 router.post('/resend-verification', resendVerificationCode);
 router.post('/login', login);
+router.post('/logout', protect, logout);  // Add this
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password/:token', resetPassword);
-router.post('/logout', protect, logout);
 router.get('/me', protect, getMe);
 
 // Google OAuth routes (only for regular users)
