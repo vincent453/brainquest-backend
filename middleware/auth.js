@@ -6,15 +6,20 @@ exports.protect = async (req, res, next) => {
   try {
     let token;
 
-    // Check for token in Authorization header
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    // Check for token in cookies FIRST
+    if (req.cookies.token) {
+      token = req.cookies.token;
+    }
+    // Fallback to Authorization header (for backward compatibility)
+    else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       token = req.headers.authorization.split(' ')[1];
     }
 
     if (!token) {
       return res.status(401).json({ 
         success: false, 
-        message: 'Not authorized to access this route' 
+        message: 'Not authorized to access this route',
+        isAuthenticated: false
       });
     }
 
@@ -28,7 +33,8 @@ exports.protect = async (req, res, next) => {
       if (!req.user) {
         return res.status(401).json({ 
           success: false, 
-          message: 'User not found' 
+          message: 'User not found',
+          isAuthenticated: false
         });
       }
 
@@ -36,7 +42,8 @@ exports.protect = async (req, res, next) => {
     } catch (error) {
       return res.status(401).json({ 
         success: false, 
-        message: 'Not authorized, token failed' 
+        message: 'Not authorized, token failed',
+        isAuthenticated: false
       });
     }
   } catch (error) {
