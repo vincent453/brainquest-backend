@@ -9,16 +9,8 @@ const ADMIN_EMAILS = [
   // Add more admin emails
 ];
 
-// Or check by domain
 const isAdminEmail = (email) => {
-  // Option 1: Check against specific emails
   if (ADMIN_EMAILS.includes(email.toLowerCase())) return true;
-  
-  // Option 2: Check by domain (e.g., all @admin.company.com emails)
-  // const adminDomains = ['admin.company.com'];
-  // const domain = email.split('@')[1];
-  // return adminDomains.includes(domain);
-  
   return false;
 };
 
@@ -27,6 +19,40 @@ const generateToken = (userId) => {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '7d'
   });
+};
+
+// Send token as HTTP-only cookie
+const sendTokenResponse = (user, statusCode, res, message = 'Success') => {
+  // Create token
+  const token = generateToken(user._id);
+
+  // Cookie options
+  const options = {
+    expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+    httpOnly: true, // Cannot be accessed by JavaScript
+    secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Cross-site in production
+    path: '/' // Available on all paths
+  };
+
+  res
+    .status(statusCode)
+    .cookie('token', token, options)
+    .json({
+      success: true,
+      message,
+      data: {
+        user: {
+          id: user._id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role,
+          onboardingCompleted: user.onboardingCompleted,
+          isEmailVerified: user.isEmailVerified
+        }
+      }
+    });
 };
 
 // @desc    Register user
@@ -135,31 +161,15 @@ exports.verifyEmail = async (req, res) => {
     user.emailVerificationCode = undefined;
     user.emailVerificationExpires = undefined;
     
-    // For Google OAuth users, mark onboarding as complete
-    if (user.googleId && user.role === 'admin') {
+    // For admins, mark onboarding as complete
+    if (user.role === 'admin') {
       user.onboardingCompleted = true;
     }
     
     await user.save();
 
-    // Generate token
-    const token = generateToken(user._id);
-
-    res.status(200).json({
-      success: true,
-      message: 'Email verified successfully',
-      token,
-      data: {
-        user: {
-          id: user._id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-          role: user.role,
-          onboardingCompleted: user.onboardingCompleted
-        }
-      }
-    });
+    // Send token as HTTP-only cookie
+    sendTokenResponse(user, 200, res, 'Email verified successfully');
 
   } catch (error) {
     console.error('Email verification error:', error);
@@ -264,30 +274,40 @@ exports.login = async (req, res) => {
       });
     }
 
-    // Generate token
-    const token = generateToken(user._id);
-
-    res.status(200).json({
-      success: true,
-      message: 'Login successful',
-      token,
-      data: {
-        user: {
-          id: user._id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-          role: user.role,
-          onboardingCompleted: user.onboardingCompleted
-        }
-      }
-    });
+    // Send token as HTTP-only cookie
+    sendTokenResponse(user, 200, res, 'Login successful');
 
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Server error during login' 
+    });
+  }
+};
+
+// @desc    Logout user / clear cookie
+// @route   POST /api/auth/logout
+// @access  Private
+exports.logout = async (req, res) => {
+  try {
+    res
+      .status(200)
+      .cookie('token', 'none', {
+        expires: new Date(Date.now() + 1000), // Expire in 1 second
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+      })
+      .json({
+        success: true,
+        message: 'Logged out successfully'
+      });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error during logout' 
     });
   }
 };
