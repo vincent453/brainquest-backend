@@ -23,6 +23,7 @@ router.post('/resend-verification', resendVerificationCode);
 router.post('/login', login);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password/:token', resetPassword);
+router.post('/logout', protect, logout);
 router.get('/me', protect, getMe);
 
 // Google OAuth routes (only for regular users)
