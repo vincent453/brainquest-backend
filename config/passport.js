@@ -9,7 +9,7 @@ module.exports = function (passport) {
 
         // ✅ MUST be absolute & match Google Console
         callbackURL:
-          'https://brainquest-backend.onrender.com/api/auth/google/callback',
+          'https://brainquest-app.onrender.com/auth/google/callback',
       },
       async (accessToken, refreshToken, profile, done) => {
         try {
