@@ -1,25 +1,25 @@
-const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 
-module.exports = function(passport) {
+module.exports = function (passport) {
   passport.use(
     new GoogleStrategy(
       {
         clientID: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        callbackURL: '/api/auth/google/callback',
-        scope: ['profile', 'email']
+
+        // ✅ MUST be absolute & match Google Console
+        callbackURL:
+          'https://brainquest-backend.onrender.com/api/auth/google/callback',
       },
       async (accessToken, refreshToken, profile, done) => {
         try {
-          // Extract user data from Google profile
           const userData = {
-            id: profile.id,
-            email: profile.emails[0].value,
+            googleId: profile.id,
+            email: profile.emails?.[0]?.value,
             displayName: profile.displayName,
-            firstName: profile.name.givenName,
-            lastName: profile.name.familyName,
-            photo: profile.photos[0]?.value
+            firstName: profile.name?.givenName,
+            lastName: profile.name?.familyName,
+            photo: profile.photos?.[0]?.value,
           };
 
           return done(null, userData);
@@ -29,12 +29,4 @@ module.exports = function(passport) {
       }
     )
   );
-
-  passport.serializeUser((user, done) => {
-    done(null, user);
-  });
-
-  passport.deserializeUser((user, done) => {
-    done(null, user);
-  });
 };
