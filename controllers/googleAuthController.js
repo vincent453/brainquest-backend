@@ -108,18 +108,4 @@ exports.googleFailure = (req, res) => {
   );
 };
 
-// @desc    Logout user
-// @route   POST /api/auth/logout
-// @access  Private (or Public – your choice)
-exports.logout = (req, res) => {
-  res
-    .cookie('token', '', {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      expires: new Date(0), // Expire immediately
-      path: '/'
-    })
-    .status(200)
-    .json({ success: true, message: 'Logged out successfully' });
-};
+
