@@ -70,17 +70,17 @@ exports.googleCallback = async (req, res) => {
       const firstName = nameParts[0] || '';
       const lastName = nameParts.slice(1).join(' ') || '';
 
-      user = await User.create({
+      const newUser = new User({
         firstName,
         lastName,
         email: googleUser.email.toLowerCase(),
-        googleId: googleUser.id,
         isEmailVerified: true,
         role: 'user',
-        onboardingCompleted: false
       });
-      console.log('Google User Data:', googleUser);
-      console.log('🆕 New Google user created:', user.email);
+      
+      newUser.googleId = googleUser.id; // assign before validation
+      await newUser.save();
+
     }
 
     // Redirect back to frontend (NO user data in URL)
