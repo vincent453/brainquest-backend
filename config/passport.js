@@ -8,8 +8,7 @@ module.exports = function (passport) {
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
 
         // ✅ MUST be absolute & match Google Console
-        callbackURL:
-          'https://brainquest-app.onrender.com/auth/google/callback',
+      callbackURL: 'https://brainquest-backend.onrender.com/api/auth/google/callback',
       },
       async (accessToken, refreshToken, profile, done) => {
         try {
