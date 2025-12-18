@@ -79,7 +79,7 @@ exports.googleCallback = async (req, res) => {
         role: 'user',
         onboardingCompleted: false
       });
-
+      console.log('Google User Data:', googleUser);
       console.log('🆕 New Google user created:', user.email);
     }
 
