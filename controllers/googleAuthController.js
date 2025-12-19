@@ -37,6 +37,8 @@ const sendTokenResponse = (user, res, redirectUrl) => {
 exports.googleCallback = async (req, res) => {
   try {
     console.log('🔵 Google callback triggered');
+    console.log('🔍 req.user data:', JSON.stringify(req.user, null, 2));
+    
     const googleUser = req.user;
 
     if (!googleUser) {
@@ -64,19 +66,30 @@ exports.googleCallback = async (req, res) => {
       }
     } else {
       // Create new user for Google login
-      const nameParts = googleUser.displayName?.split(' ') || [];
-      const firstName = nameParts[0] || 'User';
-      const lastName = nameParts.slice(1).join(' ') || '';
+      // Use firstName/lastName from Passport, fallback to displayName parsing
+      const firstName = googleUser.firstName || 
+                       googleUser.displayName?.split(' ')[0] || 
+                       'User';
+      const lastName = googleUser.lastName || 
+                      googleUser.displayName?.split(' ').slice(1).join(' ') || 
+                      '';
+
+      console.log('🔍 Creating user with:', {
+        firstName,
+        lastName,
+        email: googleUser.email,
+        googleId: googleUser.googleId || googleUser.id,
+        hasPasswordField: false
+      });
 
       user = await User.create({
         firstName,
         lastName,
         email: googleUser.email.toLowerCase(),
-        googleId: googleUser.id,      // ✅ Set googleId first
-        isEmailVerified: true,        // ✅ Google already verified email
+        googleId: googleUser.googleId || googleUser.id,  // Support both field names
+        isEmailVerified: true,
         role: 'user',
         onboardingCompleted: false
-        // ✅ DON'T include password field at all - not even as undefined
       });
       
       console.log('✅ New Google user created:', user.email);
