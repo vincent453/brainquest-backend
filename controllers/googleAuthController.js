@@ -23,9 +23,10 @@ exports.googleCallback = async (req, res) => {
       );
     }
 
+    // ✅ FIXED: Support both googleUser.googleId and googleUser.id
     let user = await User.findOne({
       $or: [
-       { googleId: googleUser.googleId || googleUser.id },
+        { googleId: googleUser.googleId || googleUser.id },
         { email: googleUser.email.toLowerCase() }
       ]
     });
@@ -33,9 +34,11 @@ exports.googleCallback = async (req, res) => {
     if (user) {
       console.log('🔵 Existing user:', user.email);
       if (!user.googleId) {
-       user.googleId = googleUser.googleId || googleUser.id;
+        // ✅ FIXED: Support both googleUser.googleId and googleUser.id
+        user.googleId = googleUser.googleId || googleUser.id;
         user.isEmailVerified = true;
         await user.save();
+        console.log('✅ Google ID linked to existing user');
       }
     } else {
       const firstName = googleUser.firstName || 
@@ -53,28 +56,41 @@ exports.googleCallback = async (req, res) => {
         hasPasswordField: false
       });
 
-      user = await User.create({
-        firstName,
-        lastName,
-        email: googleUser.email.toLowerCase(),
-        googleId: googleUser.googleId || googleUser.id,
-        isEmailVerified: true,
-        role: 'user',
-        onboardingCompleted: false
-      });
-      
-      console.log('✅ New Google user created:', user.email);
+      try {
+        user = await User.create({
+          firstName,
+          lastName,
+          email: googleUser.email.toLowerCase(),
+          googleId: googleUser.googleId || googleUser.id,
+          isEmailVerified: true,
+          role: 'user',
+          onboardingCompleted: false
+        });
+        
+        console.log('✅ New Google user created:', user.email);
+        console.log('✅ User saved to MongoDB with ID:', user._id);
+        console.log('✅ Google ID:', user.googleId);
+        
+      } catch (createError) {
+        console.error('❌ Failed to create user:', createError.message);
+        console.error('❌ Error details:', JSON.stringify(createError, null, 2));
+        
+        return res.redirect(
+          `${process.env.FRONTEND_URL}/auth/google/error?message=${encodeURIComponent(createError.message)}`
+        );
+      }
     }
 
-    // ⭐ KEY CHANGE: Send token in URL instead of cookie
+    // Send token in URL
     const token = generateToken(user._id);
     const redirectUrl = `${process.env.FRONTEND_URL}/auth/google/success?token=${token}&onboarding=${!user.onboardingCompleted}`;
     
-    console.log('🔗 Redirecting with token');
+    console.log('🔗 Redirecting with token to:', process.env.FRONTEND_URL);
     res.redirect(redirectUrl);
 
   } catch (error) {
     console.error('❌ Google callback error:', error);
+    console.error('❌ Stack trace:', error.stack);
     res.redirect(
       `${process.env.FRONTEND_URL}/auth/google/error?message=Authentication failed`
     );
