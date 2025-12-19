@@ -37,7 +37,6 @@ const sendTokenResponse = (user, res, redirectUrl) => {
 exports.googleCallback = async (req, res) => {
   try {
     console.log('🔵 Google callback triggered');
-
     const googleUser = req.user;
 
     if (!googleUser) {
@@ -57,7 +56,6 @@ exports.googleCallback = async (req, res) => {
 
     if (user) {
       console.log('🔵 Existing user:', user.email);
-
       // Attach Google ID if missing
       if (!user.googleId) {
         user.googleId = googleUser.id;
@@ -67,20 +65,20 @@ exports.googleCallback = async (req, res) => {
     } else {
       // Create new user for Google login
       const nameParts = googleUser.displayName?.split(' ') || [];
-      const firstName = nameParts[0] || '';
+      const firstName = nameParts[0] || 'User';
       const lastName = nameParts.slice(1).join(' ') || '';
 
       user = await User.create({
         firstName,
         lastName,
         email: googleUser.email.toLowerCase(),
-        googleId: googleUser.id,   // Important!
-        isEmailVerified: true,     // Google already verified email
+        googleId: googleUser.id,      // ✅ Set googleId first
+        isEmailVerified: true,        // ✅ Google already verified email
         role: 'user',
-        onboardingCompleted: false,
-        password: undefined        // Avoid password validation error
+        onboardingCompleted: false
+        // ✅ DON'T include password field at all - not even as undefined
       });
-
+      
       console.log('✅ New Google user created:', user.email);
     }
 
