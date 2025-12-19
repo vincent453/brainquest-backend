@@ -21,8 +21,8 @@ const sendTokenResponse = (user, res, redirectUrl) => {
   res
     .cookie('token', token, {
       httpOnly: true,
-      secure: true,          // REQUIRED for sameSite:none
-      sameSite: 'none',      // Cross-domain cookie
+      secure: process.env.NODE_ENV === 'production', // true only in production
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       path: '/'
     })
@@ -47,7 +47,7 @@ exports.googleCallback = async (req, res) => {
       );
     }
 
-    // Find existing user
+    // Find existing user by googleId or email
     let user = await User.findOne({
       $or: [
         { googleId: googleUser.id },
@@ -65,27 +65,27 @@ exports.googleCallback = async (req, res) => {
         await user.save();
       }
     } else {
-      // Create new user
+      // Create new user for Google login
       const nameParts = googleUser.displayName?.split(' ') || [];
       const firstName = nameParts[0] || '';
       const lastName = nameParts.slice(1).join(' ') || '';
 
-      const newUser = new User({
+      user = await User.create({
         firstName,
         lastName,
         email: googleUser.email.toLowerCase(),
-        isEmailVerified: true,
+        googleId: googleUser.id,   // Important!
+        isEmailVerified: true,     // Google already verified email
         role: 'user',
+        onboardingCompleted: false,
+        password: undefined        // Avoid password validation error
       });
-      
-      newUser.googleId = googleUser.id; // assign before validation
-      await newUser.save();
 
+      console.log('✅ New Google user created:', user.email);
     }
 
-    // Redirect back to frontend (NO user data in URL)
+    // Redirect back to frontend
     const redirectUrl = `${process.env.FRONTEND_URL}/auth/google/success`;
-
     sendTokenResponse(user, res, redirectUrl);
 
   } catch (error) {
@@ -107,5 +107,3 @@ exports.googleFailure = (req, res) => {
     `${process.env.FRONTEND_URL}/auth/google/error?message=Google authentication failed`
   );
 };
-
-
