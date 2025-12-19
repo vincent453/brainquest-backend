@@ -1,9 +1,6 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 
-/**
- * Generate JWT
- */
 const generateToken = (userId) => {
   return jwt.sign(
     { id: userId },
@@ -12,28 +9,6 @@ const generateToken = (userId) => {
   );
 };
 
-/**
- * Send JWT as HTTP-only cookie and redirect
- */
-const sendTokenResponse = (user, res, redirectUrl) => {
-  const token = generateToken(user._id);
-
-  res
-    .cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // true only in production
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      path: '/'
-    })
-    .redirect(redirectUrl);
-};
-
-/**
- * @desc    Google OAuth callback
- * @route   GET /api/auth/google/callback
- * @access  Public
- */
 exports.googleCallback = async (req, res) => {
   try {
     console.log('🔵 Google callback triggered');
@@ -48,7 +23,6 @@ exports.googleCallback = async (req, res) => {
       );
     }
 
-    // Find existing user by googleId or email
     let user = await User.findOne({
       $or: [
         { googleId: googleUser.id },
@@ -58,15 +32,12 @@ exports.googleCallback = async (req, res) => {
 
     if (user) {
       console.log('🔵 Existing user:', user.email);
-      // Attach Google ID if missing
       if (!user.googleId) {
         user.googleId = googleUser.id;
         user.isEmailVerified = true;
         await user.save();
       }
     } else {
-      // Create new user for Google login
-      // Use firstName/lastName from Passport, fallback to displayName parsing
       const firstName = googleUser.firstName || 
                        googleUser.displayName?.split(' ')[0] || 
                        'User';
@@ -86,7 +57,7 @@ exports.googleCallback = async (req, res) => {
         firstName,
         lastName,
         email: googleUser.email.toLowerCase(),
-        googleId: googleUser.googleId || googleUser.id,  // Support both field names
+        googleId: googleUser.googleId || googleUser.id,
         isEmailVerified: true,
         role: 'user',
         onboardingCompleted: false
@@ -95,9 +66,12 @@ exports.googleCallback = async (req, res) => {
       console.log('✅ New Google user created:', user.email);
     }
 
-    // Redirect back to frontend
-    const redirectUrl = `${process.env.FRONTEND_URL}/auth/google/success`;
-    sendTokenResponse(user, res, redirectUrl);
+    // ⭐ KEY CHANGE: Send token in URL instead of cookie
+    const token = generateToken(user._id);
+    const redirectUrl = `${process.env.FRONTEND_URL}/auth/google/success?token=${token}&onboarding=${!user.onboardingCompleted}`;
+    
+    console.log('🔗 Redirecting with token');
+    res.redirect(redirectUrl);
 
   } catch (error) {
     console.error('❌ Google callback error:', error);
@@ -107,11 +81,6 @@ exports.googleCallback = async (req, res) => {
   }
 };
 
-/**
- * @desc    Google OAuth failure
- * @route   GET /api/auth/google/failure
- * @access  Public
- */
 exports.googleFailure = (req, res) => {
   console.error('❌ Google authentication failed');
   res.redirect(
