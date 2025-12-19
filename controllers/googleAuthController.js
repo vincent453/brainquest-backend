@@ -25,7 +25,7 @@ exports.googleCallback = async (req, res) => {
 
     let user = await User.findOne({
       $or: [
-        { googleId: googleUser.id },
+       { googleId: googleUser.googleId || googleUser.id },
         { email: googleUser.email.toLowerCase() }
       ]
     });
@@ -33,7 +33,7 @@ exports.googleCallback = async (req, res) => {
     if (user) {
       console.log('🔵 Existing user:', user.email);
       if (!user.googleId) {
-        user.googleId = googleUser.id;
+       user.googleId = googleUser.googleId || googleUser.id;
         user.isEmailVerified = true;
         await user.save();
       }
