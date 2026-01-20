@@ -116,62 +116,55 @@ exports.requireOnboarding = async (req, res, next) => {
 /**
  * Verify JWT token and attach user to request
  */
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+
 exports.authenticate = async (req, res, next) => {
   try {
-    // Get token from header
-    exports.token = req.headers.authorization?.replace('Bearer ', '');
-    
-    if (!token) {
+    // 1️⃣ Get token from header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
         message: 'Access denied. No token provided.'
       });
     }
-    
-    // Verify token
-    exports.decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    // Find user
-    exports.user = await User.findById(decoded.userId).select('-password');
-    
+
+    const token = authHeader.split(' ')[1]; // Extract the token
+
+    // 2️⃣ Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // 3️⃣ Find user in DB
+    const user = await User.findById(decoded.id).select('-password'); // Make sure token uses "id" as payload
     if (!user) {
       return res.status(401).json({
         success: false,
         message: 'Invalid token. User not found.'
       });
     }
-    
+
     if (!user.isActive) {
       return res.status(403).json({
         success: false,
         message: 'Account is deactivated.'
       });
     }
-    
-    // Attach user to request
+
+    // 4️⃣ Attach user to request
     req.user = user;
-    next();
+    next(); // Allow request to continue
   } catch (error) {
     console.error('Authentication error:', error);
-    
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid token.'
-      });
-    }
-    
+
     if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        message: 'Token expired.'
-      });
+      return res.status(401).json({ success: false, message: 'Token expired.' });
     }
-    
-    return res.status(500).json({
-      success: false,
-      message: 'Authentication failed.'
-    });
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ success: false, message: 'Invalid token.' });
+    }
+
+    return res.status(500).json({ success: false, message: 'Authentication failed.' });
   }
 };
 
