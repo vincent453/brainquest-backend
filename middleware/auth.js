@@ -1,6 +1,5 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-
 // Protect routes - check if user is authenticated
 exports.protect = async (req, res, next) => {
   try {
@@ -116,13 +115,13 @@ exports.requireOnboarding = async (req, res, next) => {
 /**
  * Verify JWT token and attach user to request
  */
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+
 
 exports.authenticate = async (req, res, next) => {
   try {
-    // 1️⃣ Get token from header
+    // 1️⃣ Get token from Authorization header
     const authHeader = req.headers.authorization;
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
@@ -130,13 +129,14 @@ exports.authenticate = async (req, res, next) => {
       });
     }
 
-    const token = authHeader.split(' ')[1]; // Extract the token
+    const token = authHeader.split(' ')[1]; // Bearer <token>
 
     // 2️⃣ Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET); // Use "id" or "userId" depending on your token payload
 
-    // 3️⃣ Find user in DB
-    const user = await User.findById(decoded.id).select('-password'); // Make sure token uses "id" as payload
+    // 3️⃣ Find user
+    const user = await User.findById(decoded.id).select('-password'); // ✅ token must have { id: user._id }
+
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -153,13 +153,15 @@ exports.authenticate = async (req, res, next) => {
 
     // 4️⃣ Attach user to request
     req.user = user;
-    next(); // Allow request to continue
+
+    next(); // ✅ pass control to route
   } catch (error) {
     console.error('Authentication error:', error);
 
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({ success: false, message: 'Token expired.' });
     }
+
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({ success: false, message: 'Invalid token.' });
     }
@@ -167,6 +169,7 @@ exports.authenticate = async (req, res, next) => {
     return res.status(500).json({ success: false, message: 'Authentication failed.' });
   }
 };
+
 
 /**
  * Restrict access to admin users only
