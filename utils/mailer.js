@@ -1,51 +1,23 @@
-// utils/mailer.js - MAILERSEND VERSION FOR RENDER.COM
-const nodemailer = require("nodemailer");
+// utils/emailService.js
+const { MailerSend, EmailParams, Sender, Recipient } = require("mailersend");
 
-// Validate environment variables
-if (!process.env.MAILERSEND_API_KEY) {
-  console.error('❌ ERROR: MAILERSEND_API_KEY is not set in environment variables');
-  console.error('📝 To fix: Add MAILERSEND_API_KEY to your Render.com environment variables');
-  console.error('📖 Get API key from: https://www.mailersend.com/');
-  throw new Error('MAILERSEND_API_KEY environment variable is required');
-}
-
-console.log('📧 Initializing MailerSend transporter...');
-console.log('   API Token:', process.env.MAILERSEND_API_KEY ? '✅ Set (hidden)' : '❌ Not set');
-
-// MailerSend SMTP Configuration
-const transporter = nodemailer.createTransport({
-  host: 'smtp.mailersend.net',
-  port: 587,
-  secure: false, // Use STARTTLS
-  auth: {
-    user: 'MS_XXXXXX', // This will be overridden, but required by nodemailer
-    pass: process.env.MAILERSEND_API_KEY, // Your MailerSend API token
-  },
-  // Connection settings
-  connectionTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000,
-  socketTimeout: 10000,
-  // MailerSend specific
-  tls: {
-    rejectUnauthorized: true,
-    minVersion: 'TLSv1.2'
-  }
+const mailerSend = new MailerSend({
+  apiKey: process.env.MAILERSEND_API_KEY,
 });
 
-// Verify transporter configuration on startup
-transporter.verify(function (error, success) {
-  if (error) {
-    console.error('❌ MailerSend transporter verification FAILED:', error.message);
-    console.error('');
-    console.error('🔍 Common fixes:');
-    console.error('   1. Make sure MAILERSEND_API_KEY is set in Render environment variables');
-    console.error('   2. Make sure the API token is valid (starts with mlsn_)');
-    console.error('   3. Check domain is verified in MailerSend dashboard');
-    console.error('   4. Check sender email is verified in MailerSend');
-    console.error('');
-  } else {
-    console.log('✅ MailerSend transporter is ready to send emails');
-  }
-});
+const APP_FROM_EMAIL = process.env.APP_FROM_EMAIL;
+const APP_NAME = process.env.APP_NAME || 'BrainQuest';
 
-module.exports = transporter;
+exports.sendVerificationEmail = async (email, code, firstName) => {
+  const sentFrom = new Sender(APP_FROM_EMAIL, APP_NAME);
+  const recipients = [new Recipient(email, firstName)];
+
+  const emailParams = new EmailParams()
+    .setFrom(sentFrom)
+    .setTo(recipients)
+    .setSubject("Email Verification - BrainQuest")
+    .setHtml(`Your verification code: <strong>${code}</strong>`)
+    .setText(`Your verification code: ${code}`);
+
+  await mailerSend.email.send(emailParams);
+};
