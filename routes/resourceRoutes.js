@@ -16,7 +16,7 @@ router.post(
     requireAdmin,
     upload.single('file'),
     resourceController.uploadResource
-)
+);
 
 /**
  * @route   GET /api/resources
