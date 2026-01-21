@@ -361,4 +361,3 @@ exports.getOCRStatus = async (req, res) => {
         });
     }
 };
-
