@@ -1,6 +1,5 @@
 const { default: mongoose } = require('mongoose');
 const mangoose = require('mongoose');
-const { isErrored, isReadable } = require('nodemailer/lib/xoauth2');
 
 const resourceSchema = new mangoose.Schema({
     // File information
