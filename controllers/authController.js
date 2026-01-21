@@ -96,6 +96,8 @@ exports.signup = async (req, res) => {
     // Determine role based on email
     const role = isAdminEmail(email) ? 'admin' : 'user';
 
+    console.log('📝 Creating user:', email);
+
     // Create user
     const user = await User.create({
       firstName,
@@ -105,27 +107,76 @@ exports.signup = async (req, res) => {
       role
     });
 
+    console.log('✅ User created successfully:', user._id);
+
     // Generate verification code
+    console.log('🔐 Generating verification code...');
     const verificationCode = user.generateEmailVerificationCode();
+    
+    console.log('💾 Saving verification code to database...');
     await user.save();
+    console.log('✅ Verification code saved');
 
-    // Send verification email
-    await sendVerificationEmail(user.email, verificationCode, user.firstName);
-
-    res.status(201).json({
-      success: true,
-      message: 'Registration successful! Please check your email for verification code.',
-      data: {
-        email: user.email,
-        role: user.role
+    // Send verification email with detailed error handling
+    console.log('📧 Attempting to send verification email to:', user.email);
+    
+    try {
+      // Check if email service is properly configured
+      if (!sendVerificationEmail || typeof sendVerificationEmail !== 'function') {
+        throw new Error('Email service not properly configured - sendVerificationEmail is not a function');
       }
-    });
+
+      await sendVerificationEmail(user.email, verificationCode, user.firstName);
+      console.log('✅ Verification email sent successfully');
+
+      res.status(201).json({
+        success: true,
+        message: 'Registration successful! Please check your email for verification code.',
+        data: {
+          email: user.email,
+          role: user.role
+        }
+      });
+
+    } catch (emailError) {
+      // Email sending failed, but user was created
+      console.error('❌ Email sending failed:', emailError);
+      console.error('Email error details:', {
+        name: emailError.name,
+        message: emailError.message,
+        stack: emailError.stack
+      });
+
+      // Return success with warning about email
+      res.status(201).json({
+        success: true,
+        message: 'Registration successful! However, we could not send the verification email. Please use the resend option.',
+        warning: 'Email delivery failed',
+        data: {
+          email: user.email,
+          role: user.role,
+          emailError: emailError.message // Include error for debugging
+        }
+      });
+    }
 
   } catch (error) {
-    console.error('Signup error:', error);
+    console.error('❌ Signup error:', error);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
+
+    // More detailed error response
     res.status(500).json({ 
       success: false, 
-      message: 'Server error during registration' 
+      message: 'Server error during registration',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      details: process.env.NODE_ENV === 'development' ? {
+        errorType: error.name,
+        errorMessage: error.message
+      } : undefined
     });
   }
 };
@@ -144,6 +195,9 @@ exports.verifyEmail = async (req, res) => {
       });
     }
 
+    console.log('🔍 Verifying email for:', email);
+    console.log('🔑 Verification code provided:', code);
+
     const user = await User.findOne({ 
       email: email.toLowerCase(),
       emailVerificationCode: code,
@@ -151,6 +205,7 @@ exports.verifyEmail = async (req, res) => {
     });
 
     if (!user) {
+      console.log('❌ Invalid or expired verification code');
       return res.status(400).json({ 
         success: false, 
         message: 'Invalid or expired verification code' 
@@ -167,15 +222,17 @@ exports.verifyEmail = async (req, res) => {
     }
     
     await user.save();
+    console.log('✅ Email verified successfully');
 
     // Send token as HTTP-only cookie
     sendTokenResponse(user, 200, res, 'Email verified successfully');
 
   } catch (error) {
-    console.error('Email verification error:', error);
+    console.error('❌ Email verification error:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Server error during email verification' 
+      message: 'Server error during email verification',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -193,6 +250,8 @@ exports.resendVerificationCode = async (req, res) => {
         message: 'Please provide email' 
       });
     }
+
+    console.log('🔄 Resending verification code to:', email);
 
     const user = await User.findOne({ email: email.toLowerCase() });
 
@@ -213,20 +272,34 @@ exports.resendVerificationCode = async (req, res) => {
     // Generate new verification code
     const verificationCode = user.generateEmailVerificationCode();
     await user.save();
+    console.log('✅ New verification code generated');
 
-    // Send verification email
-    await sendVerificationEmail(user.email, verificationCode, user.firstName);
+    // Send verification email with error handling
+    try {
+      await sendVerificationEmail(user.email, verificationCode, user.firstName);
+      console.log('✅ Verification email resent successfully');
 
-    res.status(200).json({
-      success: true,
-      message: 'Verification code sent to your email'
-    });
+      res.status(200).json({
+        success: true,
+        message: 'Verification code sent to your email'
+      });
+
+    } catch (emailError) {
+      console.error('❌ Failed to resend verification email:', emailError);
+      
+      res.status(500).json({
+        success: false,
+        message: 'Failed to send verification email. Please try again later.',
+        error: process.env.NODE_ENV === 'development' ? emailError.message : undefined
+      });
+    }
 
   } catch (error) {
-    console.error('Resend verification error:', error);
+    console.error('❌ Resend verification error:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Server error while resending verification code' 
+      message: 'Server error while resending verification code',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -278,10 +351,11 @@ exports.login = async (req, res) => {
     sendTokenResponse(user, 200, res, 'Login successful');
 
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('❌ Login error:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Server error during login' 
+      message: 'Server error during login',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -304,7 +378,7 @@ exports.logout = async (req, res) => {
         message: 'Logged out successfully'
       });
   } catch (error) {
-    console.error('Logout error:', error);
+    console.error('❌ Logout error:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Server error during logout' 
@@ -342,19 +416,37 @@ exports.forgotPassword = async (req, res) => {
     // Create reset URL
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
-    // Send email
-    await sendPasswordResetEmail(user.email, resetUrl, user.firstName);
+    // Send email with error handling
+    try {
+      await sendPasswordResetEmail(user.email, resetUrl, user.firstName);
+      console.log('✅ Password reset email sent');
 
-    res.status(200).json({
-      success: true,
-      message: 'Password reset link sent to your email'
-    });
+      res.status(200).json({
+        success: true,
+        message: 'Password reset link sent to your email'
+      });
+
+    } catch (emailError) {
+      console.error('❌ Failed to send password reset email:', emailError);
+      
+      // Rollback the reset token
+      user.passwordResetToken = undefined;
+      user.passwordResetExpires = undefined;
+      await user.save();
+
+      res.status(500).json({
+        success: false,
+        message: 'Failed to send password reset email. Please try again later.',
+        error: process.env.NODE_ENV === 'development' ? emailError.message : undefined
+      });
+    }
 
   } catch (error) {
-    console.error('Forgot password error:', error);
+    console.error('❌ Forgot password error:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Server error while processing password reset' 
+      message: 'Server error while processing password reset',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -416,10 +508,11 @@ exports.resetPassword = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Reset password error:', error);
+    console.error('❌ Reset password error:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Server error while resetting password' 
+      message: 'Server error while resetting password',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -436,10 +529,11 @@ exports.getMe = async (req, res) => {
       data: { user }
     });
   } catch (error) {
-    console.error('Get me error:', error);
+    console.error('❌ Get me error:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Server error' 
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
