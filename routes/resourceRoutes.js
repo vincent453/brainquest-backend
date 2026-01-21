@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const resourceController = require('../controllers/ResourceController');
+const resourceController = require('../controllers/resourceController');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
