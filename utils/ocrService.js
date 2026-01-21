@@ -16,7 +16,7 @@ class OCRService {
      * @param {String} mimeType - MIME type of the file
      * @returns {Promise<{text: string, confidence?:number}>}
      */ 
-    async extractText(filePath, mineType) {
+    async extractText(filePath, mimeType) {
      try {
       console.log(`Starting text extraction for: ${filePath}`);
       

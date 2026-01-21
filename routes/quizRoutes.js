@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const quizController = require('../controllers/quizController');
-const { authenticate,  requireStudent } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 
 /**
  * @route   POST /api/quizzes/generate
