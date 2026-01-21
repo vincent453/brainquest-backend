@@ -34,7 +34,6 @@ router.get(
 router.get(
   '/my-attempts',
   authenticate,
-  requireStudent,
   quizController.getMyAttempts
 );
 
@@ -93,7 +92,6 @@ router.delete(
 router.post(
   '/:id/attempt',
   authenticate,
-  requireStudent,
   quizController.submitQuizAttempt
 );
 
