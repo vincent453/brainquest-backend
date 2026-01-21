@@ -13,7 +13,7 @@ const upload = require('../middleware/upload');
 router.post(
     '/upload',
     authenticate,
-    requireAdmin,
+    
     upload.single('file'),
     resourceController.uploadResource
 );
@@ -50,7 +50,7 @@ router.get(
 router.put(
     '/:id',
     authenticate,
-    requireAdmin,
+    
     resourceController.updateResource
 );
 
@@ -62,14 +62,14 @@ router.put(
 router.delete(
     '/:id',
     authenticate,
-    requireAdmin,
+    
     resourceController.deleteResource
 );
 
 router.post(
     '/:id/retry-ocr',
     authenticate,
-    requireAdmin,
+    
     resourceController.retryOCR
 );
 

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const quizController = require('../controllers/quizController');
-const { authenticate, requireAdmin, requireStudent } = require('../middleware/auth');
+const { authenticate,  requireStudent } = require('../middleware/auth');
 
 /**
  * @route   POST /api/quizzes/generate
@@ -11,7 +11,7 @@ const { authenticate, requireAdmin, requireStudent } = require('../middleware/au
 router.post(
   '/generate',
   authenticate,
-  requireAdmin,
+  
   quizController.generateQuiz
 );
 
@@ -57,7 +57,7 @@ router.get(
 router.put(
   '/:id',
   authenticate,
-  requireAdmin,
+  
   quizController.updateQuiz
 );
 
@@ -69,7 +69,7 @@ router.put(
 router.patch(
   '/:id/publish',
   authenticate,
-  requireAdmin,
+  
   quizController.togglePublish
 );
 
@@ -81,7 +81,7 @@ router.patch(
 router.delete(
   '/:id',
   authenticate,
-  requireAdmin,
+  
   quizController.deleteQuiz
 );
 
@@ -105,7 +105,7 @@ router.post(
 router.get(
   '/:id/attempts',
   authenticate,
-  requireAdmin,
+  
   quizController.getQuizAttempts
 );
 
