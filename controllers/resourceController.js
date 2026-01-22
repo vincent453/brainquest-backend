@@ -362,4 +362,12 @@ exports.getOCRStatus = async (req, res) => {
     }
 };
 
-module.exports = exports;
+module.exports = {
+    uploadResource: exports.uploadResource,
+    getResources: exports.getResources,
+    getResourceById: exports.getResourceById,
+    updateResource: exports.updateResource,
+    deleteResource: exports.deleteResource,
+    retryOCR: exports.retryOCR,
+    getOCRStatus: exports.getOCRStatus
+};
