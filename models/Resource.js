@@ -14,7 +14,7 @@ const resourceSchema = new mangoose.Schema({
     },
     url: {
         type: String,
-        required: true,
+        required: false,
         trim: true
     },
     
