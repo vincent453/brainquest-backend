@@ -47,12 +47,11 @@ router.get(
  * @access Admin only
  */
 
-router.put(
-    '/:id',
-    authenticate,
-    
-    resourceController.updateResource
-);
+// router.put(
+//     '/:id',
+//     authenticate,
+//     resourceController.updateResource
+// );
 
 /**
  * @route DELETE /api/resources/:id
