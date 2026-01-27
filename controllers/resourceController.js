@@ -2,6 +2,7 @@ const Resource = require('../models/Resource');
 const ocrService = require('../utils/ocrService');
 const fs = require('fs').promises;
 const path = require('path');
+const cloudinary = require('../utils/cloudinary');
 
 /**
  * Upload and process a resource file
@@ -191,39 +192,79 @@ exports.getResourceById = async (req, res) => {
  * PUT /api/resources/:id
  * Admin only
  */
-exports.updateResource = async (req, res) => {
-    try {
-        const { title, description, subject, tags } = req.body;
-        const resource = await Resource.findById(req.params.id);
 
-        if (!resource || resource.isDeleted) {
-            return res.status(404).json({
-                success: false,
-                message: 'Resource not found',
-            });
+
+exports.uploadResource = async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+
+    const { title, description, subject, tags } = req.body;
+    if (!title) return res.status(400).json({ success: false, message: 'Title is required' });
+
+    // Upload file to Cloudinary
+    const fileType = req.file.mimetype.startsWith('image/') ? 'image' : 'document';
+    let uploadedFile;
+
+    if (fileType === 'image') {
+      uploadedFile = await cloudinary.uploader.upload_stream({
+        resource_type: 'image',
+        folder: 'resources'
+      }, (error, result) => {
+        if (error) throw error;
+        return result;
+      });
+
+      // multer memory buffer to stream
+      const stream = cloudinary.uploader.upload_stream(
+        { folder: 'resources' },
+        async (error, result) => {
+          if (error) throw error;
+          // Save resource in DB here after upload
         }
+      );
+      stream.end(req.file.buffer);
+    } else {
+      // For PDFs/documents
+      uploadedFile = await cloudinary.uploader.upload_stream({
+        resource_type: 'raw',
+        folder: 'resources'
+      }, (error, result) => {
+        if (error) throw error;
+        return result;
+      });
 
-        // Update fields
-        if (title) resource.title = title;
-        if (description !== undefined) resource.description = description;
-        if (subject !== undefined) resource.subject = subject;
-        if (tags) resource.tags = Array.isArray(tags) ? tags : tags.split(',').map(tag => tag.trim());
-    
-        await resource.save();
-
-        res.json({
-            success: true,
-            message: 'Resource updated successfully',
-            data: { resource }
-        });
-    } catch (error) {
-        console.error('Update resource error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Server error updating resource',
-            error: error.message
-        });
+      const stream = cloudinary.uploader.upload_stream(
+        { resource_type: 'raw', folder: 'resources' },
+        async (error, result) => {
+          if (error) throw error;
+          // Save resource in DB here
+        }
+      );
+      stream.end(req.file.buffer);
     }
+
+    // Save resource in MongoDB
+    const resource = await Resource.create({
+      title,
+      description,
+      fileType,
+      originalFileName: req.file.originalname,
+      filePath: uploadedFile.secure_url,
+      mimetype: req.file.mimetype,
+      uploadedBy: req.user._id,
+      subject,
+      tags: tags ? tags.split(',').map(tag => tag.trim()) : []
+    });
+
+    // Start OCR processing (you might need to download from Cloudinary for PDFs/images)
+    processOCR(resource._id, resource.filePath, req.file.mimetype);
+
+    res.status(201).json({ success: true, message: 'Resource uploaded successfully', data: resource });
+
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ success: false, message: 'Server error during file upload', error: error.message });
+  }
 };
 
 /**
