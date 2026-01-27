@@ -2,9 +2,6 @@ const Resource = require('../models/Resource');
 const ocrService = require('../utils/ocrService');
 const fs = require('fs').promises;
 const path = require('path');
-const Resource = require('../models/Resource');
-const ocrService = require('../utils/ocrService');
-const fs = require('fs').promises;
 const cloudinary = require('../utils/cloudinary');
 const streamifier = require('streamifier');
 
