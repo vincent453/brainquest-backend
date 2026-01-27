@@ -2,118 +2,102 @@ const Resource = require('../models/Resource');
 const ocrService = require('../utils/ocrService');
 const fs = require('fs').promises;
 const path = require('path');
-const cloudinary = require('../utils/cloudinary');
 const streamifier = require('streamifier');
+const cloudinary = require('../utils/cloudinary');
 
 /**
- * Helper: promisified Cloudinary upload
+ * Helper function to upload file to Cloudinary
  */
-function uploadToCloudinary(fileBuffer, options) {
-    return new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(options, (error, result) => {
-            if (error) return reject(error);
-            resolve(result);
-        });
-        streamifier.createReadStream(fileBuffer).pipe(stream);
-    });
+function uploadToCloudinary(fileBuffer, resourceType = 'raw') {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { resource_type: resourceType, folder: 'resources' },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    );
+    streamifier.createReadStream(fileBuffer).pipe(stream);
+  });
 }
 
 /**
- * Upload a new resource
+ * Upload and process a resource file
  * POST /api/resources/upload
- * Admin only
+ * Admin only  
  */
 exports.uploadResource = async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({
-                success: false,
-                message: 'No file uploaded',
-            });
-        }
-
-        const { title, description, subject, tags } = req.body;
-        if (!title) {
-            return res.status(400).json({
-                success: false,
-                message: 'Title is required',
-            });
-        }
-
-        // Determine file type
-        let fileType = 'document';
-        if (req.file.mimetype === 'application/pdf') fileType = 'pdf';
-        else if (req.file.mimetype.startsWith('image/')) fileType = 'image';
-
-        // Upload file to Cloudinary
-        const uploadedFile = await uploadToCloudinary(req.file.buffer, {
-            resource_type: fileType === 'image' ? 'image' : 'raw',
-            folder: 'resources'
-        });
-
-        // Save resource in MongoDB
-        const resource = await Resource.create({
-            title,
-            description,
-            originalFileName: req.file.originalname,
-            filename: uploadedFile.public_id,
-            filePath: uploadedFile.secure_url,
-            fileType,
-            mimetype: req.file.mimetype,
-            fileSize: req.file.size,
-            uploadedBy: req.user._id,
-            subject,
-            tags: tags ? tags.split(',').map(tag => tag.trim()) : []
-        });
-
-        // Start OCR processing asynchronously
-        processOCR(resource._id, resource.filePath, req.file.mimetype);
-
-        res.status(201).json({
-            success: true,
-            message: 'Resource uploaded successfully',
-            data: {
-                id: resource._id,
-                title: resource.title,
-                fileType: resource.fileType,
-                ocrStatus: resource.ocrStatus
-            }
-        });
-
-    } catch (error) {
-        console.error('Upload error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Server error during file upload',
-            error: error.message
-        });
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
+
+    const { title, description, subject, tags } = req.body;
+    if (!title) return res.status(400).json({ success: false, message: 'Title is required' });
+
+    // Determine file type
+    let fileType = 'document';
+    if (req.file.mimetype === 'application/pdf') fileType = 'pdf';
+    else if (req.file.mimetype.startsWith('image/')) fileType = 'image';
+
+    // Upload file to Cloudinary
+    const resourceType = fileType === 'image' ? 'image' : 'raw';
+    const uploadedFile = await uploadToCloudinary(req.file.buffer, resourceType);
+
+    // Save resource in MongoDB
+    const resource = await Resource.create({
+      title,
+      description,
+      fileType,
+      originalFileName: req.file.originalname,
+      filename: uploadedFile.public_id, // Cloudinary ID
+      filePath: uploadedFile.secure_url, // URL
+      fileSize: req.file.size,
+      mimetype: req.file.mimetype,
+      uploadedBy: req.user._id,
+      subject,
+      tags: tags ? tags.split(',').map(tag => tag.trim()) : []
+    });
+
+    // Start OCR processing
+    processOCR(resource._id, resource.filePath, req.file.mimetype);
+
+    res.status(201).json({ success: true, message: 'Resource uploaded successfully', data: resource });
+
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ success: false, message: 'Server error during file upload', error: error.message });
+  }
 };
 
 /**
- * OCR processing function
+ * Async OCR processing function
  */
 async function processOCR(resourceId, filePath, mimeType) {
-    try {
-        await Resource.findByIdAndUpdate(resourceId, { ocrStatus: 'processing' });
+  try {
+    console.log(`Starting OCR for resource ${resourceId}`);
 
-        const result = await ocrService.extractText(filePath, mimeType);
+    await Resource.findByIdAndUpdate(resourceId, { ocrStatus: 'processing' });
 
-        await Resource.findByIdAndUpdate(resourceId, {
-            extractedText: result,
-            ocrStatus: 'completed',
-            isProcessed: true
-        });
+    const result = await ocrService.extractText(filePath, mimeType);
 
-        console.log(`OCR completed for ${resourceId}: ${result.length} characters.`);
-    } catch (error) {
-        console.error(`OCR failed for ${resourceId}:`, error);
-        await Resource.findByIdAndUpdate(resourceId, {
-            ocrStatus: 'failed',
-            ocrError: error.message
-        });
-    }
+    await Resource.findByIdAndUpdate(resourceId, {
+      extractedText: result,
+      ocrStatus: 'completed',
+      isProcessed: true
+    });
+
+    console.log(`OCR completed for resource ${resourceId}. Extracted ${result.length} characters.`);
+  } catch (error) {
+    console.error(`OCR failed for resource ${resourceId}:`, error);
+
+    await Resource.findByIdAndUpdate(resourceId, {
+      ocrStatus: 'failed',
+      ocrError: error.message
+    });
+  }
 }
+
 
 /**
  * Get all resources
