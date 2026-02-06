@@ -7,8 +7,11 @@ module.exports = function (passport) {
         clientID: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
 
-        // ✅ MUST be absolute & match Google Console
-      callbackURL: 'https://brainquest-backend.onrender.com/api/auth/google/callback',
+        // ✅ Dynamic callback URL
+        callbackURL:
+          process.env.NODE_ENV === 'production'
+            ? 'https://brainquest-backend.onrender.com/api/auth/google/callback'
+            : 'http://localhost:5000/api/auth/google/callback',
       },
       async (accessToken, refreshToken, profile, done) => {
         try {

@@ -2,6 +2,8 @@ const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/emailService');
+const getFrontendBaseUrl = require('../utils/getFrontendBaseUrl');
+
 
 // Admin email detection - Add your admin emails here
 const ADMIN_EMAILS = [
@@ -414,7 +416,9 @@ exports.forgotPassword = async (req, res) => {
     await user.save();
 
     // Create reset URL
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+    const frontendBase = getFrontendBaseUrl(req);
+      const resetUrl = `${frontendBase}/reset-password/${resetToken}`;
+
 
     // Send email with error handling
     try {
