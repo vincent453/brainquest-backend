@@ -26,7 +26,7 @@ router.post(
 
 router.get(
     '/',
-    authenticate,
+    // authenticate,
     resourceController.getResources
 );
 

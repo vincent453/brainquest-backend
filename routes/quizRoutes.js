@@ -22,7 +22,7 @@ router.post(
  */
 router.get(
   '/',
-  authenticate,
+  // authenticate,
   quizController.getAllQuizzes
 );
 
