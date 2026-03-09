@@ -18,8 +18,8 @@ function uploadToCloudinary(fileBuffer, resourceType = 'raw') {
       }
     );
     streamifier.createReadStream(fileBuffer).pipe(stream);
-  });
-}
+  }); 
+} 
 
 /**
  * Upload and process a resource file
