@@ -3,12 +3,9 @@
 // ========================================
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
-const path = require('path');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const adminController = require('../controllers/Adminpastquestioncontroller');
 const upload = require('../middleware/upload');
-
 
 /**
  * @route   POST /api/admin/past-questions/bulk-upload
@@ -18,6 +15,7 @@ const upload = require('../middleware/upload');
 router.post(
   '/past-questions/bulk-upload',
   authenticate,
+  authorize('admin'),
   upload.array('files', 10), // Max 10 files
   adminController.bulkUploadPastQuestions
 );
@@ -30,6 +28,7 @@ router.post(
 router.get(
   '/courses',
   authenticate,
+  authorize('admin'),
   adminController.getAvailableCourses
 );
 
@@ -39,9 +38,10 @@ router.get(
  * @access  Admin only
  */
 router.get(
-  '/courses/:courseCode',  
-   authenticate,
+  '/courses/:courseCode',
+  authenticate,
+  authorize('admin'),
   adminController.getCourseDetails
 );
 
-module.exports = router;  
+module.exports = router;

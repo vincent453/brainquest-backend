@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const quizController = require('../controllers/quizController');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 
 /**
  * @route   POST /api/quizzes/generate
@@ -11,7 +11,7 @@ const { authenticate } = require('../middleware/auth');
 router.post(
   '/generate',
   authenticate,
-  
+  authorize('admin'),
   quizController.generateQuiz
 );
 
@@ -22,14 +22,15 @@ router.post(
  */
 router.get(
   '/',
-  // authenticate,
+  authenticate,
   quizController.getAllQuizzes
 );
 
 /**
  * @route   GET /api/quizzes/my-attempts
  * @desc    Get current student's quiz attempts
- * @access  Student only
+ * @access  Authenticated users
+ * NOTE: Must be defined BEFORE /:id to avoid route conflict
  */
 router.get(
   '/my-attempts',
@@ -56,7 +57,7 @@ router.get(
 router.put(
   '/:id',
   authenticate,
-  
+  authorize('admin'),
   quizController.updateQuiz
 );
 
@@ -68,7 +69,7 @@ router.put(
 router.patch(
   '/:id/publish',
   authenticate,
-  
+  authorize('admin'),
   quizController.togglePublish
 );
 
@@ -80,14 +81,14 @@ router.patch(
 router.delete(
   '/:id',
   authenticate,
-  
+  authorize('admin'),
   quizController.deleteQuiz
 );
 
 /**
  * @route   POST /api/quizzes/:id/attempt
  * @desc    Submit a quiz attempt
- * @access  Student only
+ * @access  Authenticated users (students)
  */
 router.post(
   '/:id/attempt',
@@ -103,7 +104,7 @@ router.post(
 router.get(
   '/:id/attempts',
   authenticate,
-  
+  authorize('admin'),
   quizController.getQuizAttempts
 );
 

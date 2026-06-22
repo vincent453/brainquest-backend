@@ -1,75 +1,66 @@
 const express = require('express');
 const router = express.Router();
 const resourceController = require('../controllers/resourceController');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
 /**
- * @route   POST /api/resources
+ * @route   POST /api/resources/upload
  * @desc    Upload a new resource
- * @access  Private
+ * @access  Admin only
  */
-
 router.post(
-    '/upload',
-    authenticate,
-    
-    upload.single('file'),
-    resourceController.uploadResource
+  '/upload',
+  authenticate,
+  authorize('admin'),
+  upload.single('file'),
+  resourceController.uploadResource
 );
 
 /**
  * @route   GET /api/resources
- * @desc    Get all resources with filtersa
- * @access  Private
+ * @desc    Get all resources with filters
+ * @access  Authenticated users
  */
-
 router.get(
-    '/',
-    // authenticate,
-    resourceController.getResources
+  '/',
+  authenticate,
+  resourceController.getResources
 );
 
 /**
  * @route   GET /api/resources/:id
  * @desc    Get single resource by ID
- * @access  Admin only
+ * @access  Authenticated users
  */
 router.get(
-    '/:id',
-    authenticate,
-    resourceController.getResourceById
+  '/:id',
+  authenticate,
+  resourceController.getResourceById
 );
 
 /**
- * @route PUT /api/resources/:id
- * @desc  Update resource metadata
- * @access Admin only
- */
-
-// router.put(
-//     '/:id',
-//     authenticate,
-//     resourceController.updateResource
-// );
-
-/**
- * @route DELETE /api/resources/:id
- * @desc  Soft delete a resource
- * @access Admin only
+ * @route   DELETE /api/resources/:id
+ * @desc    Soft or permanent delete a resource
+ * @access  Admin only
  */
 router.delete(
-    '/:id',
-    authenticate,
-    
-    resourceController.deleteResource
+  '/:id',
+  authenticate,
+  authorize('admin'),
+  resourceController.deleteResource
 );
 
+/**
+ * @route   POST /api/resources/:id/retry-ocr
+ * @desc    Retry OCR processing for a resource
+ * @access  Admin only
+ */
 router.post(
-    '/:id/retry-ocr',
-    authenticate,
-    
-    resourceController.retryOCR
+  '/:id/retry-ocr',
+  authenticate,
+  authorize('admin'),
+  resourceController.retryOCR
 );
 
 /**
@@ -77,11 +68,10 @@ router.post(
  * @desc    Get OCR processing status
  * @access  Authenticated users
  */
-
 router.get(
-    '/:id/ocr-status',
-    authenticate,
-    resourceController.getOCRStatus
+  '/:id/ocr-status',
+  authenticate,
+  resourceController.getOCRStatus
 );
 
 module.exports = router;
