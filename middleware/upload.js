@@ -1,22 +1,28 @@
-// In your multer config file (likely in middleware/upload.js or similar)
 const multer = require('multer');
 
-// Change from diskStorage to memoryStorage
+// Use memory storage (required for Cloudinary buffer upload)
 const storage = multer.memoryStorage();
 
-const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
-  },
-  fileFilter: (req, file, cb) => {
-    // Add file type validation if needed
-    const allowedTypes = /pdf|jpeg|jpg|png|gif/;
-    const extname = allowedTypes.test(file.originalname.toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
+// Allowed mime types
+const allowedMimeTypes = [
+  'application/pdf',
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif'
+];
 
-    if (mimetype && extname) {
-      return cb(null, true);
+const upload = multer({
+  storage,
+
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB per file
+    files: 10 // max number of files
+  },
+
+  fileFilter: (req, file, cb) => {
+    if (allowedMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
     } else {
       cb(new Error('Only PDF and image files are allowed'));
     }

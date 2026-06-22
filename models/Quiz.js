@@ -8,37 +8,39 @@ const questionSchema = new mongoose.Schema({
   },
   question: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
-  
-  // For multiple choice
   options: [{
-    type: String
+    type: String,
+    trim: true
   }],
   correctAnswer: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
-  
-  // For short answer (alternative acceptable answers)
-  acceptableAnswers: [{
-    type: String
-  }],
-  
-  // Additional info
-  explanation: String,
+  explanation: {
+    type: String,
+    trim: true
+  },
+  points: {
+    type: Number,
+    default: 1
+  },
   difficulty: {
     type: String,
     enum: ['easy', 'medium', 'hard'],
     default: 'medium'
   },
-  points: {
-    type: Number,
-    default: 1
+  topic: {
+    type: String,
+    trim: true
   }
 });
 
 const quizSchema = new mongoose.Schema({
+  // Basic Info
   title: {
     type: String,
     required: true,
@@ -49,26 +51,60 @@ const quizSchema = new mongoose.Schema({
     trim: true
   },
   
-  // Source information
-  sourceResource: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Resource',
-    required: true
+  // Course Information (NEW)
+  courseCode: {
+    type: String,
+    uppercase: true,
+    trim: true,
+    index: true
   },
-  sourceText: String, // Snippet of the source text used
+  year: {
+    type: String,
+    trim: true,
+    index: true
+  },
   
-  // Quiz questions
+  // Quiz Type (NEW)
+  quizType: {
+    type: String,
+    enum: ['past-question', 'ai-generated', 'manual', 'hybrid'],
+    default: 'ai-generated'
+  },
+  
+  // Questions
   questions: [questionSchema],
   
-  // Quiz settings
-  totalQuestions: {
-    type: Number,
+  // Source
+  resourceId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Resource'
+  },
+  resources: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Resource'
+  }],
+  
+  generatedFrom: {
+    type: String,
+    default: 'AI'
+  },
+  
+  // Metadata
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
     required: true
   },
-  totalPoints: {
-    type: Number,
-    required: true
+  category: {
+    type: String,
+    trim: true
   },
+  tags: [{
+    type: String,
+    trim: true
+  }],
+  
+  // Settings
   timeLimit: {
     type: Number, // in minutes
     default: null
@@ -77,40 +113,21 @@ const quizSchema = new mongoose.Schema({
     type: Number, // percentage
     default: 70
   },
-  
-  // Difficulty distribution
-  difficultyDistribution: {
-    easy: { type: Number, default: 0 },
-    medium: { type: Number, default: 0 },
-    hard: { type: Number, default: 0 }
+  shuffleQuestions: {
+    type: Boolean,
+    default: false
+  },
+  showCorrectAnswers: {
+    type: Boolean,
+    default: true
   },
   
-  // AI generation metadata
-  generatedBy: {
-    type: String,
-    enum: ['openai', 'anthropic', 'manual'],
-    default: 'anthropic'
-  },
-  generationPrompt: String,
-  
-  // Access control
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
+  // Status
   isPublished: {
     type: Boolean,
     default: false
   },
   publishedAt: Date,
-  
-  // Subject/category
-  subject: String,
-  tags: [{
-    type: String,
-    trim: true
-  }],
   
   // Statistics
   totalAttempts: {
@@ -120,29 +137,20 @@ const quizSchema = new mongoose.Schema({
   averageScore: {
     type: Number,
     default: 0
-  }
+  },
   
 }, { timestamps: true });
 
-// Calculate total points before saving
-quizSchema.pre('save', function(next) {
-  if (this.questions && this.questions.length > 0) {
-    this.totalQuestions = this.questions.length;
-    this.totalPoints = this.questions.reduce((sum, q) => sum + (q.points || 1), 0);
-    
-    // Calculate difficulty distribution
-    this.difficultyDistribution = {
-      easy: this.questions.filter(q => q.difficulty === 'easy').length,
-      medium: this.questions.filter(q => q.difficulty === 'medium').length,
-      hard: this.questions.filter(q => q.difficulty === 'hard').length
-    };
-  }
-  next();
+// Calculate total points for the quiz
+quizSchema.virtual('totalPoints').get(function() {
+  return this.questions.reduce((sum, q) => sum + q.points, 0);
 });
 
-// Indexes
+// Index for efficient queries
 quizSchema.index({ createdBy: 1, createdAt: -1 });
-quizSchema.index({ sourceResource: 1 });
+quizSchema.index({ resourceId: 1 });
 quizSchema.index({ isPublished: 1 });
+quizSchema.index({ courseCode: 1, year: 1 }); // NEW
+quizSchema.index({ quizType: 1 }); // NEW
 
 module.exports = mongoose.model('Quiz', quizSchema);

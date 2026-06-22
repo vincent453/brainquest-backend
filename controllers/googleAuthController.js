@@ -12,7 +12,7 @@ const generateToken = (userId) => {
     { expiresIn: process.env.JWT_EXPIRE || '7d' }
   );
 };
-
+ 
 /**
  * Set JWT token as HTTP-only cookie
  */

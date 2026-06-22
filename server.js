@@ -1,3 +1,8 @@
+require('dotenv').config(); // ✅ FIRST LINE
+
+const dns = require("dns");
+dns.setServers(["1.1.1.1", "8.8.8.8"]);
+
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -15,11 +20,14 @@ const authRoutes = require("./routes/authRoutes");
 const onboardingRoutes = require("./routes/onboardingRoutes");
 const resourceRoutes = require("./routes/resourceRoutes");
 const quizRoutes = require("./routes/quizRoutes");
+const adminRoutes = require('./routes/adminRoutes'); // Your admin routes file
+const studentRoutes = require('./routes/studentRoutes'); // Your student routes file
+
 
 // Initialize app
 const app = express();
 
-// Trust proxy (important for Render)
+// Trust proxy (important for Render / production)
 app.set("trust proxy", 1);
 
 // Create uploads directory if it doesn't exist
@@ -32,37 +40,48 @@ if (!fs.existsSync(uploadsDir)) {
 // Passport config (Google strategy)
 require("./config/passport")(passport);
 
-// Middleware
+// ======================
+// 🔐 MIDDLEWARE
+// ======================
+
+// Smart CORS setup
 const isDevelopment = process.env.NODE_ENV === "development";
-const allowedOrigins = ["http://localhost:3000", process.env.FRONTEND_URL];
+
+const allowedOrigins = [
+  "http://localhost:3000",
+  process.env.FRONTEND_URL,
+].filter(Boolean);
+
 app.use(
   cors({
     origin: function (origin, callback) {
       console.log("CORS origin:", origin);
-      // allow requests with no origin (like mobile apps or curl requests or 
-      // even browser nav - like we have on the frontend) in dev mode
+
+      // Allow requests with no origin (Postman, mobile apps) in development
       if (!origin && isDevelopment) {
         return callback(null, true);
       }
 
-      if (allowedOrigins.indexOf(origin) !== -1) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
       }
+
+      return callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
-  }),
+  })
 );
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// ✅ Passport initialization ONLY (NO SESSION)
+// Passport initialization (NO session)
 app.use(passport.initialize());
 
-// Connect to MongoDB
+// ======================
+// 🗄️ DATABASE
+// ======================
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected successfully"))
@@ -71,11 +90,15 @@ mongoose
     process.exit(1);
   });
 
-// Routes
+// ======================
+// 📦 ROUTES
+// ======================
 app.use("/api/auth", authRoutes);
 app.use("/api/onboarding", onboardingRoutes);
 app.use("/api/resources", resourceRoutes);
 app.use("/api/quizzes", quizRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/student', studentRoutes);
 
 // Root route
 app.get("/", (req, res) => {
@@ -101,16 +124,20 @@ app.get("/api/health", (req, res) => {
     message: "Server is running",
     timestamp: new Date().toISOString(),
     mongodb:
-      mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+      mongoose.connection.readyState === 1
+        ? "connected"
+        : "disconnected",
     uploadsDir: fs.existsSync(uploadsDir) ? "exists" : "missing",
   });
 });
 
-// Error handler
+// ======================
+// ❌ ERROR HANDLER
+// ======================
 app.use((err, req, res, next) => {
   console.error("Server error:", err);
 
-  // Handle multer errors
+  // Multer errors
   if (err.name === "MulterError") {
     if (err.code === "LIMIT_FILE_SIZE") {
       return res.status(400).json({
@@ -118,9 +145,18 @@ app.use((err, req, res, next) => {
         message: "File size too large. Maximum size is 10MB.",
       });
     }
+
     return res.status(400).json({
       success: false,
       message: err.message,
+    });
+  }
+
+  // CORS errors
+  if (err.message === "Not allowed by CORS") {
+    return res.status(403).json({
+      success: false,
+      message: "CORS policy does not allow this origin",
     });
   }
 
@@ -130,7 +166,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
+// ======================
+// 🚫 404 HANDLER
+// ======================
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -138,19 +176,27 @@ app.use((req, res) => {
   });
 });
 
-// Graceful shutdown
+// ======================
+// 🛑 GRACEFUL SHUTDOWN
+// ======================
 process.on("SIGTERM", async () => {
-  console.log("SIGTERM signal received: closing HTTP server");
+  console.log("SIGTERM signal received: closing server");
 
-  // Terminate OCR worker if running
-  const ocrService = require("./utils/ocrService");
-  await ocrService.terminateWorker();
+  try {
+    const ocrService = require("./utils/ocrService");
+    await ocrService.terminateWorker();
+  } catch (err) {
+    console.log("OCR worker not running or failed to terminate");
+  }
 
   process.exit(0);
 });
 
-// Start server
+// ======================
+// 🚀 START SERVER
+// ======================
 const PORT = process.env.PORT || 5000;
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📁 Uploads directory: ${uploadsDir}`);
