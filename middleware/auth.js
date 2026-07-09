@@ -1,95 +1,65 @@
-const jwt = require('jsonwebtoken');
+const supabaseAdmin = require('../utils/supabaseAdmin');
 const User = require('../models/User');
 
 /**
- * 🔐 AUTHENTICATE USER (JWT)
- * - Reads token from HTTP-only cookie (preferred) or Authorization header (fallback)
- * - Verifies token
- * - Attaches user to req.user
+ * 🔐 AUTHENTICATE USER (Supabase)
+ * - Reads Bearer token from Authorization header
+ * - Verifies it against Supabase Auth
+ * - Finds (or creates) the matching MongoDB profile
+ * - Attaches the MongoDB profile to req.user
+ * - Attaches the raw Supabase user to req.supabaseUser (for email_confirmed_at, etc.)
  */
 exports.authenticate = async (req, res, next) => {
   try {
-    let token;
-    let tokenSource;
+    const authHeader = req.headers.authorization;
 
-    // 1️⃣ Try HTTP-only cookie FIRST (preferred for web clients)
-    if (req.cookies && req.cookies.token) {
-      token = req.cookies.token;
-      tokenSource = 'cookie';
-      console.log('🍪 Token found in HTTP-only cookie');
-    }
-    // 2️⃣ Fallback to Authorization header (for API clients, mobile apps)
-    else if (
-      req.headers.authorization &&
-      req.headers.authorization.startsWith('Bearer ')
-    ) {
-      token = req.headers.authorization.split(' ')[1];
-      tokenSource = 'header';
-      console.log('🔑 Token found in Authorization header');
-    }
-
-    // No token found
-    if (!token) {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
         message: 'Authentication required. Please log in.'
       });
     }
 
-    // Verify token
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (error) {
-      console.error('Token verification error:', error.name);
-      
-      if (error.name === 'TokenExpiredError') {
-        return res.status(401).json({
-          success: false,
-          message: 'Session expired. Please log in again.',
-          expired: true
-        });
-      }
-      
-      if (error.name === 'JsonWebTokenError') {
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid token. Please log in again.',
-          invalid: true
-        });
-      }
-      
+    const token = authHeader.split(' ')[1];
+
+    // Verify the token with Supabase
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
+
+    if (error || !data?.user) {
       return res.status(401).json({
         success: false,
-        message: 'Token verification failed. Please log in again.'
+        message: 'Invalid or expired session. Please log in again.',
+        expired: true
       });
     }
 
-    // Get user from database
-    const user = await User.findById(decoded.id).select('-password');
+    const supabaseUser = data.user;
 
+    // Find matching MongoDB profile
+    let user = await User.findOne({ supabaseUserId: supabaseUser.id });
+
+    // JIT provisioning: first time this Supabase user has hit our API
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'User not found. Please log in again.'
+      const metadata = supabaseUser.user_metadata || {};
+      const fullName = metadata.full_name || metadata.name || '';
+      const [metaFirst, ...metaRest] = fullName.split(' ');
+
+      user = await User.create({
+        supabaseUserId: supabaseUser.id,
+        email: (supabaseUser.email || '').toLowerCase(),
+        firstName: metadata.first_name || metaFirst || 'User',
+        lastName: metadata.last_name || metaRest.join(' ') || '',
+        role: 'user',
+        onboardingCompleted: false
       });
+
+      console.log('✅ New MongoDB profile created for Supabase user:', supabaseUser.id);
     }
 
-    // Check if account is active
-    if (user.isActive === false) {
-      return res.status(403).json({
-        success: false,
-        message: 'Your account has been deactivated. Please contact support.',
-        deactivated: true
-      });
-    }
-
-    // Attach user to request
     req.user = user;
-    req.tokenSource = tokenSource; // Track where token came from
-    
-    next();
+    req.supabaseUser = supabaseUser;
 
+    next();
   } catch (error) {
     console.error('Authentication middleware error:', error);
     return res.status(500).json({
@@ -101,16 +71,12 @@ exports.authenticate = async (req, res, next) => {
 };
 
 /**
- * 🛡️ AUTHORIZE ROLES (admin, user, etc.)
- * Usage: authorize('admin') or authorize('admin', 'user')
+ * 🛡️ AUTHORIZE ROLES — unchanged, still reads req.user.role from MongoDB
  */
 exports.authorize = (...roles) => {
   return (req, res, next) => {
     if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentication required.'
-      });
+      return res.status(401).json({ success: false, message: 'Authentication required.' });
     }
 
     if (!roles.includes(req.user.role)) {
@@ -128,17 +94,15 @@ exports.authorize = (...roles) => {
 
 /**
  * 📧 REQUIRE EMAIL VERIFICATION
- * Ensures user has verified their email address
+ * Now reads verification status from the Supabase user object,
+ * since MongoDB no longer stores this.
  */
 exports.requireEmailVerification = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({
-      success: false,
-      message: 'Authentication required.'
-    });
+  if (!req.user || !req.supabaseUser) {
+    return res.status(401).json({ success: false, message: 'Authentication required.' });
   }
 
-  if (!req.user.isEmailVerified) {
+  if (!req.supabaseUser.email_confirmed_at) {
     return res.status(403).json({
       success: false,
       message: 'Please verify your email address to continue.',
@@ -151,19 +115,13 @@ exports.requireEmailVerification = (req, res, next) => {
 };
 
 /**
- * 🚀 REQUIRE ONBOARDING COMPLETION
- * Ensures non-admin users have completed onboarding
- * Admins bypass this check
+ * 🚀 REQUIRE ONBOARDING COMPLETION — unchanged
  */
 exports.requireOnboarding = (req, res, next) => {
   if (!req.user) {
-    return res.status(401).json({
-      success: false,
-      message: 'Authentication required.'
-    });
+    return res.status(401).json({ success: false, message: 'Authentication required.' });
   }
 
-  // Admins bypass onboarding requirement
   if (req.user.role === 'admin') {
     return next();
   }
@@ -182,62 +140,40 @@ exports.requireOnboarding = (req, res, next) => {
 
 /**
  * 🔓 OPTIONAL AUTHENTICATION
- * Attaches user if token exists, but doesn't require it
- * Useful for endpoints that work differently for authenticated vs anonymous users
+ * Attaches user if a valid Supabase token is present, but doesn't require it.
  */
 exports.optionalAuth = async (req, res, next) => {
   try {
-    let token;
+    const authHeader = req.headers.authorization;
 
-    // Try cookie first
-    if (req.cookies && req.cookies.token) {
-      token = req.cookies.token;
-    }
-    // Fallback to header
-    else if (
-      req.headers.authorization &&
-      req.headers.authorization.startsWith('Bearer ')
-    ) {
-      token = req.headers.authorization.split(' ')[1];
-    }
-
-    // No token is OK for optional auth
-    if (!token) {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return next();
     }
 
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(decoded.id).select('-password');
+    const token = authHeader.split(' ')[1];
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
 
-      if (user && user.isActive !== false) {
+    if (!error && data?.user) {
+      const user = await User.findOne({ supabaseUserId: data.user.id });
+      if (user) {
         req.user = user;
+        req.supabaseUser = data.user;
       }
-    } catch (error) {
-      // Token invalid/expired is OK for optional auth
-      console.log('Optional auth: Invalid/expired token, continuing as unauthenticated');
     }
 
     next();
-
   } catch (error) {
     console.error('Optional auth middleware error:', error);
-    // Continue anyway for optional auth
     next();
   }
 };
 
 /**
- * 👤 SELF OR ADMIN
- * Allows users to access their own data or admins to access any data
- * Checks if req.user._id matches req.params.id or user is admin
+ * 👤 SELF OR ADMIN — unchanged
  */
 exports.selfOrAdmin = (req, res, next) => {
   if (!req.user) {
-    return res.status(401).json({
-      success: false,
-      message: 'Authentication required.'
-    });
+    return res.status(401).json({ success: false, message: 'Authentication required.' });
   }
 
   const isAdmin = req.user.role === 'admin';
@@ -248,39 +184,6 @@ exports.selfOrAdmin = (req, res, next) => {
       success: false,
       message: 'Access denied. You can only access your own data.'
     });
-  }
-
-  next();
-};
-
-/**
- * 🚫 PREVENT AUTHENTICATED ACCESS
- * Blocks already logged-in users from accessing certain routes
- * Useful for login/register pages
- */
-exports.preventIfAuthenticated = (req, res, next) => {
-  let token;
-
-  if (req.cookies && req.cookies.token) {
-    token = req.cookies.token;
-  } else if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer ')
-  ) {
-    token = req.headers.authorization.split(' ')[1];
-  }
-
-  if (token) {
-    try {
-      jwt.verify(token, process.env.JWT_SECRET);
-      return res.status(400).json({
-        success: false,
-        message: 'You are already logged in.',
-        alreadyAuthenticated: true
-      });
-    } catch (error) {
-      // Invalid/expired token is fine, continue
-    }
   }
 
   next();

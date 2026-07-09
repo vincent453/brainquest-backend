@@ -6,7 +6,6 @@ dns.setServers(["1.1.1.1", "8.8.8.8"]);
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const passport = require("passport");
 const cookieParser = require("cookie-parser");
 const dotenv = require("dotenv");
 const fs = require("fs");
@@ -20,31 +19,23 @@ const authRoutes = require("./routes/authRoutes");
 const onboardingRoutes = require("./routes/onboardingRoutes");
 const resourceRoutes = require("./routes/resourceRoutes");
 const quizRoutes = require("./routes/quizRoutes");
-const adminRoutes = require('./routes/adminRoutes'); // Your admin routes file
-const studentRoutes = require('./routes/studentRoutes'); // Your student routes file
-
+const adminRoutes = require('./routes/adminRoutes');
+const studentRoutes = require('./routes/studentRoutes');
 
 // Initialize app
 const app = express();
 
-// Trust proxy (important for Render / production)
 app.set("trust proxy", 1);
 
-// Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, "uploads");
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
   console.log("✅ Uploads directory created");
 }
 
-// Passport config (Google strategy)
-require("./config/passport")(passport);
-
 // ======================
 // 🔐 MIDDLEWARE
 // ======================
-
-// Smart CORS setup
 const isDevelopment = process.env.NODE_ENV === "development";
 
 const allowedOrigins = [
@@ -56,16 +47,8 @@ app.use(
   cors({
     origin: function (origin, callback) {
       console.log("CORS origin:", origin);
-
-      // Allow requests with no origin (Postman, mobile apps) in development
-      if (!origin && isDevelopment) {
-        return callback(null, true);
-      }
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
+      if (!origin && isDevelopment) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
       return callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
@@ -75,9 +58,6 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-
-// Passport initialization (NO session)
-app.use(passport.initialize());
 
 // ======================
 // 🗄️ DATABASE
@@ -100,15 +80,14 @@ app.use("/api/quizzes", quizRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/student', studentRoutes);
 
-// Root route
 app.get("/", (req, res) => {
   res.json({
     success: true,
     message: "BrainQuest API is running",
-    version: "2.0.0",
+    version: "2.1.0",
     features: [
-      "User Authentication",
-      "Google OAuth",
+      "Supabase Authentication",
+      "Google Sign-In (via Supabase)",
       "File Upload (PDF, Images, Documents)",
       "OCR Text Extraction",
       "AI-Powered Quiz Generation",
@@ -117,16 +96,12 @@ app.get("/", (req, res) => {
   });
 });
 
-// Health check
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     success: true,
     message: "Server is running",
     timestamp: new Date().toISOString(),
-    mongodb:
-      mongoose.connection.readyState === 1
-        ? "connected"
-        : "disconnected",
+    mongodb: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
     uploadsDir: fs.existsSync(uploadsDir) ? "exists" : "missing",
   });
 });
@@ -137,27 +112,15 @@ app.get("/api/health", (req, res) => {
 app.use((err, req, res, next) => {
   console.error("Server error:", err);
 
-  // Multer errors
   if (err.name === "MulterError") {
     if (err.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({
-        success: false,
-        message: "File size too large. Maximum size is 10MB.",
-      });
+      return res.status(400).json({ success: false, message: "File size too large. Maximum size is 10MB." });
     }
-
-    return res.status(400).json({
-      success: false,
-      message: err.message,
-    });
+    return res.status(400).json({ success: false, message: err.message });
   }
 
-  // CORS errors
   if (err.message === "Not allowed by CORS") {
-    return res.status(403).json({
-      success: false,
-      message: "CORS policy does not allow this origin",
-    });
+    return res.status(403).json({ success: false, message: "CORS policy does not allow this origin" });
   }
 
   res.status(err.status || 500).json({
@@ -170,10 +133,7 @@ app.use((err, req, res, next) => {
 // 🚫 404 HANDLER
 // ======================
 app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: "Route not found",
-  });
+  res.status(404).json({ success: false, message: "Route not found" });
 });
 
 // ======================
@@ -181,14 +141,12 @@ app.use((req, res) => {
 // ======================
 process.on("SIGTERM", async () => {
   console.log("SIGTERM signal received: closing server");
-
   try {
     const ocrService = require("./utils/ocrService");
     await ocrService.terminateWorker();
   } catch (err) {
     console.log("OCR worker not running or failed to terminate");
   }
-
   process.exit(0);
 });
 

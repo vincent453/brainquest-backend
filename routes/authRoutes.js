@@ -1,61 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const passport = require('passport');
 
-const {
-  signup,
-  verifyEmail,
-  resendVerificationCode,
-  login,
-  logout,
-  forgotPassword,
-  resetPassword,
-  getMe
-} = require('../controllers/authController');
-
-const {
-  googleCallback,
-  googleFailure
-} = require('../controllers/googleAuthController');
-
+const { getMe } = require('../controllers/authController');
 const { authenticate } = require('../middleware/auth');
 
 // ===============================
-// 🔐 Regular Auth Routes
+// 🔐 Auth Routes
+// All actual auth (signup, login, Google, verification, password reset)
+// is handled client-side via the Supabase Auth SDK.
+// This backend only needs to resolve/return the authenticated profile.
 // ===============================
 
-router.post('/signup', signup);
-router.post('/verify-email', verifyEmail);
-router.post('/resend-verification', resendVerificationCode);
-router.post('/login', login);
-
-router.post('/logout', authenticate, logout);
+// Returns (and JIT-creates if needed) the MongoDB profile for the
+// currently authenticated Supabase user.
 router.get('/me', authenticate, getMe);
-
-router.post('/forgot-password', forgotPassword);
-router.post('/reset-password/:token', resetPassword);
-
-// ===============================
-// 🔑 Google OAuth Routes
-// ===============================
-
-router.get(
-  '/google',
-  passport.authenticate('google', {
-    scope: ['profile', 'email'],
-    session: false
-  })
-);
-
-router.get(
-  '/google/callback',
-  passport.authenticate('google', {
-    failureRedirect: '/api/auth/google/failure',
-    session: false
-  }),
-  googleCallback
-);
-
-router.get('/google/failure', googleFailure);
 
 module.exports = router;
