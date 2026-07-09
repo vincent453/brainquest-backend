@@ -3,8 +3,7 @@ const Quiz = require('../models/Quiz');
 const Exam = require('../models/Exam');
 const Resource = require('../models/Resource');
 const ocrService = require('../utils/ocrService');
-const AIQuizGenerator = require('../utils/aiQuizGenerator');
-
+const AIQuizGenerator = require('../utils/Aiquizgenerator');
 /**
  * WAY 1: Student selects course code and year to take past question quiz
  */
