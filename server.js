@@ -39,7 +39,7 @@ if (!fs.existsSync(uploadsDir)) {
 const isDevelopment = process.env.NODE_ENV === "development";
 
 const allowedOrigins = [
-  "http://localhost:3000",
+  "https://brainquest-app.vercel.app/",
   process.env.FRONTEND_URL,
 ].filter(Boolean);
 
